@@ -13,6 +13,7 @@ The following environment variables are used by this plugin
  PORT     - Port bind9 statchannel listens at
  ANYWARN  - Warning level for type ANY queries
  ANYCRIT  - Critical level for type ANY queries
+ VIEW     - The name of the view to use. Defaults to _default.
 
 =head1 USAGE
 
@@ -54,6 +55,7 @@ use XML::Simple; #libxml-simple-perl
 
 my $HOST = $ENV{'HOST'} || "localhost";
 my $PORT = $ENV{'PORT'} || "8053";
+my $VIEW = $ENV{'VIEW'} || "_default";
 
 #raise warnings in case of flood of ANY queries
 my $anywarn = $ENV{'ANYWARN'} || "10";
@@ -123,7 +125,7 @@ my $graphs = {
 		'title'		=> 'Queries Out',
 		'args'		=> '-l 0',
 		'vlabel'	=> 'Queries / second',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{_default}{rdtype},
+		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{rdtype},
 		'config'	=> { 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA', },
 	},
 	'server_statistics' =>
@@ -137,20 +139,20 @@ my $graphs = {
 	},
 	'resolver_statistics' =>
 	{
-		'title'		=> 'Resolver Statistics for View _default',
+		'title'		=> "Resolver Statistics for View $VIEW",
 		'args'		=> '-l 0',
 		'vlabel'	=> 'Derived Count',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{_default}{resstat},
+		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{resstat},
 		'config'	=> { 'type' => 'DERIVE', 'min' => 0, },
 		'fields'	=> [qw(Queryv4 Queryv6 Responsev4 Responsev6 NXDOMAIN SERVFAIL FORMERR OtherError EDNS0Fail Lame Retry QueryTimeout GlueFetchv4 GlueFetchv6 GlueFetchv4Fail GlueFetchv6Fail ValAttempt ValOk ValNegOk QryRTT10 QryRTT100 QryRTT500 QrtRTT800)],
 	},
 	#This graph should be split into two - one for negative cache and the other for positive cache
 	'cache_db_rrsets' =>
 	{
-		'title'		=> 'Cache DB RRsets for View _default',
+		'title'		=> "Cache DB RRsets for View $VIEW",
 		'args'		=> '-l 0',
 		'vlabel'	=> 'Derived Count',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{_default}{cache}{rrset},
+		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{cache}{rrset},
 		'config'	=> { 'draw' => 'AREA' },
 		'fields'	=> [qw(A !A AAAA !AAAA DLV !DLV DS !DS MX !MX NS NSEC CNAME PTR RRSIG DNSKEY TXT NXDOMAIN)],
 	},
