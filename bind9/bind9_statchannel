@@ -13,7 +13,7 @@ The following environment variables are used by this plugin
  PORT     - Port bind9 statchannel listens at
  ANYWARN  - Warning level for type ANY queries
  ANYCRIT  - Critical level for type ANY queries
- VIEW     - The name of the view to use. Defaults to _default.
+ VIEWS    - The names of the views to use. Defaults to autodiscovery. (comma separated values)
 
 =head1 USAGE
 
@@ -34,6 +34,9 @@ Use STACK instead of just AREA for some graphs
 Add warning and critical levels for type ANY queries
 Raise timeout to 300 seconds
 Add sorting to stacked graphs so they are a bit more readable/comparable
+Add autodiscovery of views
+Change hardcoded per second period with ${graph_period}
+Don't display graphs with no data
 
 =head1 LICENSE
 
@@ -55,7 +58,14 @@ use XML::Simple; #libxml-simple-perl
 
 my $HOST = $ENV{'HOST'} || "localhost";
 my $PORT = $ENV{'PORT'} || "8053";
-my $VIEW = $ENV{'VIEW'} || "_default";
+# check for defined views from the config
+my @VIEWS;
+# Backwards compatibility with older syntax
+if (defined $ENV{'VIEW'}) {
+	@VIEWS = split(/,/,$ENV{'VIEW'});
+} elsif (defined $ENV{'VIEWS'}) {
+	@VIEWS = split(/,/,$ENV{'VIEWS'});
+}
 
 #raise warnings in case of flood of ANY queries
 my $anywarn = $ENV{'ANYWARN'} || "10";
@@ -92,6 +102,15 @@ $content=~ s/name>cache</name>cache1</;
 my $xml = new XML::Simple;
 my $datain = $xml->XMLin($content) or die "Unable to parse XML.\n";
 
+# If there aren't any views defined at the config, proceed to autodiscovery
+my $count_views = @VIEWS;
+if ($count_views == 0) {
+	# Find all views defined in XML
+	foreach my $view_name (keys %{$datain->{bind}{statistics}{views}{view}}) {
+		push (@VIEWS,$view_name) unless $view_name eq '_bind';
+	}
+}
+
 # Graph Configuration
 #
 # title: title of graph
@@ -107,7 +126,7 @@ my $graphs = {
 	{
 		'title'		=> 'Queries In',
 		'args'		=> '-l 0',
-		'vlabel'	=> 'Queries / second',
+		'vlabel'	=> "Queries / \${graph_period}",
 		'location'	=> $datain->{bind}{statistics}{server}{'queries-in'}{rdtype},
 		'config'	=> { 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA', },
 		'fieldconf'	=> { 'ANY' => { 'info' => 'ANY queries', 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA', 'warning' => "$anywarn", 'critical' => "$anycrit"}, },
@@ -120,41 +139,14 @@ my $graphs = {
 		'location'	=> $datain->{bind}{statistics}{memory}{summary},
 		'fieldconf'	=> { 'TotalUse' => { 'type' => 'DERIVE', 'min' => 0, }, },
 	},
-	'queries_out' =>
-	{
-		'title'		=> 'Queries Out',
-		'args'		=> '-l 0',
-		'vlabel'	=> 'Queries / second',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{rdtype},
-		'config'	=> { 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA', },
-	},
 	'server_statistics' =>
 	{
 		'title'		=> 'Server Statistics',
 		'args'		=> '-l 0',
-		'vlabel'	=> 'Usage (Queries / Second)',
+		'vlabel'	=> "Usage (Queries / \${graph_period})",
 		'location'	=> $datain->{bind}{statistics}{server}{nsstat},
 		'fields'	=> [qw(QryRecursion QryNxrrset Requestv4 Requestv6 Response QrySuccess QryAuthAns QryNoauthAns QryNXDOMAIN RespEDNS0)],
 		'config'	=> {'type' => 'DERIVE', 'min' => 0, },
-	},
-	'resolver_statistics' =>
-	{
-		'title'		=> "Resolver Statistics for View $VIEW",
-		'args'		=> '-l 0',
-		'vlabel'	=> 'Derived Count',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{resstat},
-		'config'	=> { 'type' => 'DERIVE', 'min' => 0, },
-		'fields'	=> [qw(Queryv4 Queryv6 Responsev4 Responsev6 NXDOMAIN SERVFAIL FORMERR OtherError EDNS0Fail Lame Retry QueryTimeout GlueFetchv4 GlueFetchv6 GlueFetchv4Fail GlueFetchv6Fail ValAttempt ValOk ValNegOk QryRTT10 QryRTT100 QryRTT500 QrtRTT800)],
-	},
-	#This graph should be split into two - one for negative cache and the other for positive cache
-	'cache_db_rrsets' =>
-	{
-		'title'		=> "Cache DB RRsets for View $VIEW",
-		'args'		=> '-l 0',
-		'vlabel'	=> 'Derived Count',
-		'location'	=> $datain->{bind}{statistics}{views}{view}{$VIEW}{cache}{rrset},
-		'config'	=> { 'draw' => 'AREA' },
-		'fields'	=> [qw(A !A AAAA !AAAA DLV !DLV DS !DS MX !MX NS NSEC CNAME PTR RRSIG DNSKEY TXT NXDOMAIN)],
 	},
 	'socket_io_statistics' =>
 	{
@@ -181,27 +173,73 @@ my $graphs = {
 	},
 };
 
+# Dynamic graphs based on views
+# Create a new hash for each view and merge them later on
+my %graphs_dyn;
+my %merged;
+foreach my $view_name (@VIEWS) {
+	%graphs_dyn = (
+		"queries_out_${view_name}" =>
+			{
+				'title'		=> "Queries Out ${view_name}",
+				'args'		=> '-l 0',
+				'vlabel'	=> "Queries / \${graph_period}",
+				'location'	=> $datain->{bind}{statistics}{views}{view}{$view_name}{rdtype},
+				'config'	=> { 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA', },
+			},
+		"resolver_statistics_${view_name}" =>
+			{
+				'title'		=> "Resolver Statistics for View ${view_name}",
+				'args'		=> '-l 0',
+				'vlabel'	=> 'Derived Count',
+				'location'	=> $datain->{bind}{statistics}{views}{view}{$view_name}{resstat},
+				'config'	=> { 'type' => 'DERIVE', 'min' => 0, },
+				'fields'	=> [qw(Queryv4 Queryv6 Responsev4 Responsev6 NXDOMAIN SERVFAIL FORMERR OtherError EDNS0Fail Lame Retry QueryTimeout GlueFetchv4 GlueFetchv6 GlueFetchv4Fail GlueFetchv6Fail ValAttempt ValOk ValNegOk QryRTT10 QryRTT100 QryRTT500 QrtRTT800)],
+			},
+		#This graph should be split into two - one for negative cache and the other for positive cache
+		"cache_db_rrsets_${view_name}" =>
+		{
+			'title'		=> "Cache DB RRsets for View ${view_name}",
+			'args'		=> '-l 0',
+			'vlabel'	=> 'Derived Count',
+			'location'	=> $datain->{bind}{statistics}{views}{view}{$view_name}{cache}{rrset},
+			'config'	=> { 'draw' => 'AREA' },
+			'fields'	=> [qw(A !A AAAA !AAAA DLV !DLV DS !DS MX !MX NS NSEC CNAME PTR RRSIG DNSKEY TXT NXDOMAIN)],
+		},
+	);
+	# Merge new dynamic hash of this view
+	%merged = (%merged, %graphs_dyn);
+}
+
+# Merge all hashes, static and dynamic
+%{$graphs} = (%{$graphs}, %merged);
+
 if (defined $ARGV[0] and $ARGV[0] eq 'config') {
 	foreach my $graph_name (sort keys %{$graphs}) {
-		print "multigraph ".$graph_name."\n";
-		print "graph_title ".$graphs->{$graph_name}{title}."\n";
-		print "graph_args ".$graphs->{$graph_name}{args}."\n";
-		print "graph_vlabel ".$graphs->{$graph_name}{vlabel}."\n";
-		print "graph_category bind\n";
+		my $data_type = get_datatype($graph_name);
+		if ($data_type) {
+			print "multigraph ".$graph_name."\n";
+			print "graph_title ".$graphs->{$graph_name}{title}."\n";
+			print "graph_args ".$graphs->{$graph_name}{args}."\n";
+			print "graph_vlabel ".$graphs->{$graph_name}{vlabel}."\n";
+			print "graph_category bind\n";
 
-		#Value configuration
-		config_fields($graph_name);
-		print "\n";
+			#Value configuration
+			config_fields($graph_name);
+			print "\n";
+		}
 
 	}
 	exit;
 }
 
 foreach my $graph_name (sort keys %{$graphs}) {
-	print "multigraph $graph_name\n";
 	my $data_type = get_datatype($graph_name);
-	format_output($graph_name, $data_type);
-	print "\n";
+	if ($data_type) {
+		print "multigraph $graph_name\n";
+		format_output($graph_name, $data_type);
+		print "\n";
+	}
 }
 
 #Function grabs and prints all fields/values for a graph and outputs them based on configuration
