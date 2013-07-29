@@ -37,6 +37,7 @@ Add sorting to stacked graphs so they are a bit more readable/comparable
 Add autodiscovery of views
 Change hardcoded per second period with ${graph_period}
 Don't display graphs with no data
+Better stacking of graphs
 
 =head1 LICENSE
 
@@ -277,6 +278,20 @@ sub checkconf {
 	#Configure seperate fields based on fieldconf
 	if(defined $graphs->{$graphname}{fieldconf}{$field}) {
 		while (my ($cfield, $cvalue) = each(%{${$graphs}{$graphname}{fieldconf}{$field}})) {
+            if ("$cvalue" eq "AREA") {
+                if (defined $graph{$graphname}{'count'}) {
+                    $count = $graph{$graphname}{'count'};
+                    $count++;
+                    $graph{$graphname}{'count'} = $count;
+                } else {
+                    $graph{$graphname}{'count'} = 1;
+                }
+            }
+            if (defined $graph{$graphname}{'count'} && $graph{$graphname}{'count'} > 1) {
+                if ("$cvalue" eq "AREA") {
+                    $cvalue = 'STACK';
+                }
+            }
 			print "$field.$cfield $cvalue\n";
 		}
 	}
