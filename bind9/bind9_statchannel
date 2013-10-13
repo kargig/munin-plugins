@@ -275,7 +275,7 @@ sub checkconf {
 	my $graphname = $_[0];
 	my $field = $_[1];
 	print "$field.label ".ucfirst($field)."\n";
-	#Configure seperate fields based on fieldconf
+	#Configure separate fields based on fieldconf
 	if(defined $graphs->{$graphname}{fieldconf}{$field}) {
 		while (my ($cfield, $cvalue) = each(%{${$graphs}{$graphname}{fieldconf}{$field}})) {
             if ("$cvalue" eq "AREA") {
