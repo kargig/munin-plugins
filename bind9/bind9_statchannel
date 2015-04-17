@@ -195,7 +195,7 @@ foreach my $view_name (@VIEWS) {
 				'vlabel'	=> 'Derived Count',
 				'location'	=> $datain->{bind}{statistics}{views}{view}{$view_name}{resstat},
 				'config'	=> { 'type' => 'DERIVE', 'min' => 0, },
-				'fields'	=> [qw(Queryv4 Queryv6 Responsev4 Responsev6 NXDOMAIN SERVFAIL FORMERR OtherError EDNS0Fail Lame Retry QueryTimeout GlueFetchv4 GlueFetchv6 GlueFetchv4Fail GlueFetchv6Fail ValAttempt ValOk ValNegOk QryRTT10 QryRTT100 QryRTT500 QrtRTT800)],
+				'fields'	=> [qw(Queryv4 Queryv6 Responsev4 Responsev6 NXDOMAIN SERVFAIL FORMERR OtherError EDNS0Fail Lame Retry QueryTimeout GlueFetchv4 GlueFetchv6 GlueFetchv4Fail GlueFetchv6Fail ValAttempt ValOk ValNegOk QryRTT10 QryRTT100 QryRTT500 QryRTT800 QryRTT1600 QryRTT1600+)],
 			},
 		#This graph should be split into two - one for negative cache and the other for positive cache
 		"cache_db_rrsets_${view_name}" =>
