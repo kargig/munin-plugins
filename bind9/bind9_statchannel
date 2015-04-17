@@ -248,8 +248,17 @@ sub format_output {
 	my $graphname = $_[0];
 	my $datatype = $_[1];
 	my %values = get_values($graphname, $datatype);
-	while (my ($field,$value) = each %values) {
-		print $field.".value ".$value."\n";
+	my @list = @{$graphs->{$graphname}{fields}} if defined $graphs->{$graphname}{fields};
+	if (!@list) {
+		while (my ($field,$value) = each %values) {
+			print $field.".value ".$value."\n";
+		}
+	} else {
+		foreach my $field (@list) {
+			my $v = 0;
+			if (defined($values{$field})) { $v = $values{$field}; }
+			print("$field.value $v\n");
+		}
 	}
 }
 
