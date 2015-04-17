@@ -14,6 +14,11 @@ The following environment variables are used by this plugin
  ANYWARN  - Warning level for type ANY queries
  ANYCRIT  - Critical level for type ANY queries
  VIEWS    - The names of the views to use. Defaults to autodiscovery. (comma separated values)
+ XML_SIMPLE_PREFERRED_PARSER
+          - tells XML::Simple which parser to use. If XML::SAX is installed, XML::Simple
+            will default to that, and it is EXTREMELY sluggish.
+            so we default to XML::Parser. You can override that default choice by setting
+            the environment variable (e.g. back to XML::SAX if XML::Parser isn't installed).
 
 =head1 USAGE
 
