@@ -52,7 +52,7 @@ MIT license
 
 use strict;
 use warnings;
-use v5.10;
+use 5.010;
 use LWP::UserAgent; #libwww-perl
 use XML::Simple; #libxml-simple-perl
 #use Net::INET6Glue::INET_is_INET6; #libnet-inet6glue-perl (requires Debian 6+)
