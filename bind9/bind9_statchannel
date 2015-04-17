@@ -67,6 +67,9 @@ if (defined $ENV{'VIEW'}) {
 } elsif (defined $ENV{'VIEWS'}) {
 	@VIEWS = split(/,/,$ENV{'VIEWS'});
 }
+unless (defined($ENV{'XML_SIMPLE_PREFERRED_PARSER'})) {
+  $ENV{'XML_SIMPLE_PREFERRED_PARSER'} = 'XML::Parser';
+}
 
 #raise warnings in case of flood of ANY queries
 my $anywarn = $ENV{'ANYWARN'} || "10";
