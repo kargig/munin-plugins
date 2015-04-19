@@ -133,6 +133,8 @@ if (int(@MASTERZONES) == 0) { # Autodetect all zones for which we are authoritat
 		foreach my $zonename (keys(%{$datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}})) {
 			my $zoneserial = $datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}{$zonename}{serial};
 			unless ($zoneserial >= 100) { next; } # Those are usually dummy zones
+			my $statsval = $datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}{$zonename}{counters}{QryAuthAns};
+			unless (defined($statsval)) { next; } # No stats available in this bind version
 			if (grep(/^$zonename$/, @MASTERZONES)) { next; }
 			push(@MASTERZONES, $zonename);
 		}
