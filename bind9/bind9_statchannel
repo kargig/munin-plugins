@@ -14,6 +14,10 @@ The following environment variables are used by this plugin
  ANYWARN  - Warning level for type ANY queries
  ANYCRIT  - Critical level for type ANY queries
  VIEWS    - The names of the views to use. Defaults to autodiscovery. (comma separated values)
+ MASTERZONES
+          - The names of the zones for the "answered per zone" graph. Comma-separated.
+            Defaults to autodetect. Autodetect will graph all zones with a serial number of
+            at least 100. Set to "none" to disable that graph altogether.
  XML_SIMPLE_PREFERRED_PARSER
           - tells XML::Simple which parser to use. If XML::SAX is installed, XML::Simple
             will default to that, and it is EXTREMELY sluggish.
@@ -75,6 +79,11 @@ if (defined $ENV{'VIEW'}) {
 unless (defined($ENV{'XML_SIMPLE_PREFERRED_PARSER'})) {
   $ENV{'XML_SIMPLE_PREFERRED_PARSER'} = 'XML::Parser';
 }
+# check for defined zones from config
+my @MASTERZONES;
+if (defined($ENV{'MASTERZONES'})) {
+	@MASTERZONES = split(/,/, $ENV{'MASTERZONES'});
+}
 
 #raise warnings in case of flood of ANY queries
 my $anywarn = $ENV{'ANYWARN'} || "10";
@@ -117,6 +126,25 @@ if ($count_views == 0) {
 	# Find all views defined in XML
 	foreach my $view_name (keys %{$datain->{bind}{statistics}{views}{view}}) {
 		push (@VIEWS,$view_name) unless $view_name eq '_bind';
+	}
+}
+if (int(@MASTERZONES) == 0) { # Autodetect all zones for which we are authoritative
+	foreach my $view_name (@VIEWS) {
+		foreach my $zonename (keys(%{$datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}})) {
+			my $zoneserial = $datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}{$zonename}{serial};
+			unless ($zoneserial >= 100) { next; } # Those are usually dummy zones
+			my $statsval = $datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}{$zonename}{counters}{QryAuthAns};
+			unless (defined($statsval)) { next; } # No stats available in this bind version
+			if (grep(/^$zonename$/, @MASTERZONES)) { next; }
+			push(@MASTERZONES, $zonename);
+		}
+	}
+} else {
+	for (my $i = 0; $i < @MASTERZONES; $i++) {
+		$MASTERZONES[$i] .= '/IN' unless ($MASTERZONES[$i] =~ m!/!);
+	}
+	if ($MASTERZONES[0] eq 'none/IN') {
+		@MASTERZONES = ();
 	}
 }
 
@@ -215,6 +243,16 @@ foreach my $view_name (@VIEWS) {
 			'config'	=> { 'draw' => 'AREA' },
 			'fields'	=> [qw(A !A AAAA !AAAA DLV !DLV DS !DS MX !MX NS NSEC CNAME PTR RRSIG DNSKEY TXT NXDOMAIN)],
 		},
+		"masterzone_reqs_${view_name}" =>
+		{
+			'title'		=> "Authoritatively answered queries per zone for View ${view_name}",
+			'args'		=> '-l 0',
+			'vlabel'	=> "Queries / \${graph_period}",
+			'location'	=> ((@MASTERZONES > 0)
+			                    ? $datain->{bind}{statistics}{views}{view}{$view_name}{zones}{zone}
+			                    : undef),
+			'config'	=> { 'type' => 'DERIVE', 'min' => 0, 'draw' => 'AREA' },
+		},
 	);
 	# Merge new dynamic hash of this view
 	%merged = (%merged, %graphs_dyn);
@@ -259,13 +297,13 @@ sub format_output {
 	my @list = @{$graphs->{$graphname}{fields}} if defined $graphs->{$graphname}{fields};
 	if (!@list) {
 		while (my ($field,$value) = each %values) {
-			print $field.".value ".$value."\n";
+			print(getcleanfieldname($field) . ".value $value\n");
 		}
 	} else {
 		foreach my $field (@list) {
 			my $v = 0;
 			if (defined($values{$field})) { $v = $values{$field}; }
-			print("$field.value $v\n");
+			print(getcleanfieldname($field) . ".value $v\n");
 		}
 	}
 }
@@ -291,7 +329,8 @@ sub config_fields {
 sub checkconf {
 	my $graphname = $_[0];
 	my $field = $_[1];
-	print "$field.label ".ucfirst($field)."\n";
+	my $cleanfieldname = getcleanfieldname($_[1]);
+	print "$cleanfieldname.label ".ucfirst($field)."\n";
 	#Configure separate fields based on fieldconf
 	if(defined $graphs->{$graphname}{fieldconf}{$field}) {
 		while (my ($cfield, $cvalue) = each(%{${$graphs}{$graphname}{fieldconf}{$field}})) {
@@ -309,7 +348,7 @@ sub checkconf {
                     $cvalue = 'STACK';
                 }
             }
-			print "$field.$cfield $cvalue\n";
+			print "$cleanfieldname.$cfield $cvalue\n";
 		}
 	}
 	#Configure fields based on graph config
@@ -329,7 +368,7 @@ sub checkconf {
 					$dvalue = 'STACK';
 				}
 			}
-			print "$field.$dfield $dvalue\n";
+			print "$cleanfieldname.$dfield $dvalue\n";
 		}
 	}
 }
@@ -401,6 +440,14 @@ sub get_values {
 				}
 			}
 		}
+		when("masterzonestats") {
+			foreach my $zone (@MASTERZONES) {
+				my $zcnt = $graphs->{$graphname}{location}{$zone}{counters}{QryAuthAns};
+				next unless defined($zcnt);
+				$zone =~ s!/IN$!!g;
+				$values{$zone} = $zcnt;
+			}
+		}
 	}
 	return(%values);
 }
@@ -424,7 +471,18 @@ sub get_datatype {
 				elsif($key eq 'quantum') {
 					return("tasks");
 				}
+				elsif($key eq 'serial') {
+					return("masterzonestats");
+				}
 			}
 		}
 	}
+}
+
+# This helper function cleans (replaces) fieldnames so that they
+# do not contain characters that are NOT tolerable in munin fieldnames.
+sub getcleanfieldname {
+  my $res = $_[0];
+  $res =~ s/[\.\/]/_/g;
+  return $res;
 }
