@@ -352,7 +352,8 @@ sub checkconf {
 		}
 	}
 	#Configure fields based on graph config
-	elsif (defined %{${$graphs}{$graphname}{config}}) {
+	#elsif (defined %{${$graphs}{$graphname}{config}}) {
+	elsif (%{${$graphs}{$graphname}{config}}) {
 		while (my ($dfield, $dvalue) = each(%{${$graphs}{$graphname}{config}})) {
 			if ("$dvalue" eq "AREA") {
 				if (defined $graph{$graphname}{'count'}) {
